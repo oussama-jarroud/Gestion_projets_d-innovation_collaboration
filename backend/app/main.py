@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 import uuid
+from .ml import models as ml_models
+import pandas as pd
 
 from . import crud, models, schemas
 from .database import SessionLocal, engine, get_db
@@ -83,6 +85,35 @@ def read_alerts_for_machine(
 ):
     alerts = crud.get_alerts_for_machine(db, machine_id=machine_id, skip=skip, limit=limit)
     return alerts
+
+@app.post("/predict-anomaly/", tags=["Machine Learning"], summary="Predict anomaly for a single sensor data point")
+def predict_anomaly(sensor_data: schemas.SensorDataCreate, db: Session = Depends(get_db)):
+    # Convertir le Pydantic model en DataFrame pour le modèle ML
+    # On ne prend que les features utilisées par le modèle
+    data_for_prediction = pd.DataFrame([sensor_data.dict(include={'temperature', 'vibration', 'pressure', 'current'})])
+
+    prediction = ml_models.predict_anomaly(data_for_prediction)
+
+    if prediction is None:
+        raise HTTPException(status_code=500, detail="ML model not loaded or internal error during prediction.")
+
+    # -1 signifie anomalie, 1 signifie normal
+    is_anomaly = (prediction == -1)
+    
+    # Optionnel: Si une anomalie est détectée, créer une alerte
+    if is_anomaly:
+        # Créer une alerte dans la DB
+        alert_message = f"Anomaly detected for machine {sensor_data.machine_id} at {sensor_data.timestamp.isoformat()}"
+        new_alert = schemas.AlertCreate(
+            machine_id=sensor_data.machine_id,
+            timestamp=sensor_data.timestamp,
+            type="anomaly_detection",
+            severity="Avertissement", # Peut être ajusté en fonction de la confiance du modèle ou d'autres règles
+            message=alert_message
+        )
+        crud.create_alert(db, new_alert) # Enregistre l'alerte dans la DB
+        
+    return {"machine_id": sensor_data.machine_id, "is_anomaly": bool(is_anomaly), "prediction_score": float(prediction)}
 
 @app.get("/alerts/unresolved/", response_model=List[schemas.Alert], tags=["Alerts"])
 def read_unresolved_alerts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
