@@ -2,12 +2,12 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { WrenchScrewdriverIcon } from '@heroicons/react/24/outline';
 import { usePathname } from 'next/navigation';
 import {
   Cog6ToothIcon,
   ChartBarSquareIcon,
   ClipboardDocumentListIcon,
-  WrenchScrewdriverIcon,
   BellAlertIcon,
   UserGroupIcon,
   QueueListIcon,

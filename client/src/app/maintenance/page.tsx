@@ -1,7 +1,9 @@
+// frontend/app/maintenance/page.tsx (le fichier lui-même)
 'use client';
 
 import React, { useState } from 'react';
 import { CalendarDaysIcon, WrenchScrewdriverIcon, DocumentTextIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+// REMARQUE : Pas d'import de MaintenancePageContent ici, car ce fichier EST le contenu.
 
 interface MaintenanceTask {
   id: string;
@@ -13,7 +15,7 @@ interface MaintenanceTask {
   assignedTo: string;
 }
 
-// Données de maintenance factices
+// Données de maintenance factices (à remplacer par des appels API plus tard)
 const dummyMaintenanceTasks: MaintenanceTask[] = [
   { id: 'm1', machineName: 'Broyeur Alpha', type: 'Inspection Préventive', dueDate: '2023-11-15', status: 'En attente', priority: 'Moyenne', assignedTo: 'Jean Dupont' },
   { id: 'm2', machineName: 'Presse Hydraulique Beta', type: 'Changement de Filtre', dueDate: '2023-11-08', status: 'En cours', priority: 'Élevée', assignedTo: 'Marie Curie' },
@@ -49,9 +51,20 @@ export default function MaintenancePage() {
     }
   };
 
+  // Fonction pour marquer une tâche comme terminée
+  const handleMarkAsComplete = (taskId: string) => {
+    setTasks(prevTasks =>
+      prevTasks.map(task =>
+        task.id === taskId ? { ...task, status: 'Terminé' } : task
+      )
+    );
+  };
+
+  // TODO: Implémenter la logique pour "Planifier une tâche" et une modale
+  // Pour l'instant, le bouton ne fera rien.
 
   return (
-    <div className="p-6">
+    <div className="p-6 min-h-screen bg-gray-900 text-gray-100"> {/* Ajout de min-h-screen et couleurs */}
       <h1 className="text-3xl font-bold text-gray-100 mb-6 flex items-center">
         <WrenchScrewdriverIcon className="h-8 w-8 text-indigo-400 mr-3" />
         Gestion de la Maintenance
@@ -73,7 +86,10 @@ export default function MaintenancePage() {
             <option value="Annulé">Annulé</option>
           </select>
         </div>
-        <button className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md flex items-center">
+        <button
+            onClick={() => alert('Fonctionnalité "Planifier une tâche" à implémenter')}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md flex items-center"
+        >
             <CalendarDaysIcon className="h-5 w-5 mr-2" />
             Planifier une tâche
         </button>
@@ -101,7 +117,10 @@ export default function MaintenancePage() {
                 </p>
                 <p className="text-gray-500 text-xs">Assigné à: {task.assignedTo}</p>
                 {task.status !== 'Terminé' && (
-                    <button className="mt-4 w-full bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded-md flex items-center justify-center">
+                    <button
+                        onClick={() => handleMarkAsComplete(task.id)} // Appel de la fonction
+                        className="mt-4 w-full bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded-md flex items-center justify-center"
+                    >
                         <CheckCircleIcon className="h-5 w-5 mr-2" />
                         Marquer comme terminé
                     </button>
