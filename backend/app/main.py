@@ -1,141 +1,310 @@
-from fastapi import FastAPI, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List, Optional
-from datetime import datetime
-import uuid
-from .ml import models as ml_models
-import pandas as pd
+import logging
+import asyncio # <-- NOUVEL IMPORT
+from uuid import UUID, uuid4
+from datetime import datetime, timedelta
+from typing import List, Dict, Optional # <-- Ajout de Optional
+from collections import deque
+import random
 
-from . import crud, models, schemas
-from .database import SessionLocal, engine, get_db
+from fastapi import FastAPI, HTTPException, Body, status, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field # <-- BaseModel et Field sont importants
+from fastapi.middleware.cors import CORSMiddleware # <-- NOUVEL IMPORT pour CORS
 
-# Initialisation de l'application FastAPI
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+
+# --- Configuration de FastAPI ---
 app = FastAPI(
-    title="Predictive Maintenance API",
-    description="API for real-time industrial machine monitoring, anomaly detection, and predictive maintenance.",
+    title="API de Maintenance Prédictive Industrielle",
+    description="API pour la gestion des machines, des données de capteurs, des prédictions ML et de l'assistant IA.",
     version="1.0.0",
 )
 
-# Endpoint racine (pour vérifier que l'API fonctionne)
-@app.get("/", tags=["Root"])
-def read_root():
-    return {"message": "Welcome to the Predictive Maintenance API"}
+# --- Configuration CORS ---
+# Permet au frontend (http://localhost:3000) de communiquer avec cette API
+origins = [
+    "http://localhost",
+    "http://localhost:3000", 
+    "http://127.0.0.1:3000",
+]
 
-# --- Endpoints pour les Machines ---
-@app.post("/machines/", response_model=schemas.Machine, status_code=status.HTTP_201_CREATED, tags=["Machines"])
-def create_machine(machine: schemas.MachineCreate, db: Session = Depends(get_db)):
-    db_machine = crud.get_machine_by_serial(db, serial_number=machine.serial_number)
-    if db_machine:
-        raise HTTPException(status_code=400, detail="Machine with this serial number already registered")
-    return crud.create_machine(db=db, machine=machine)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],  # Permet toutes les méthodes (GET, POST, etc.)
+    allow_headers=["*"],  # Permet tous les headers
+)
 
-@app.get("/machines/", response_model=List[schemas.Machine], tags=["Machines"])
-def read_machines(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    machines = crud.get_machines(db, skip=skip, limit=limit)
-    return machines
+# --- Modèles de données ---
+class Machine(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    name: str
+    location: str
+    type: str
+    serial_number: str
+    installation_date: datetime = Field(default_factory=datetime.now)
+    status: str = "Active"
+    last_maintenance: datetime = Field(default_factory=datetime.now)
+    thresholds_config: Dict = {} # Seuils pour la détection d'anomalies
 
-@app.get("/machines/{machine_id}", response_model=schemas.Machine, tags=["Machines"])
-def read_machine(machine_id: uuid.UUID, db: Session = Depends(get_db)):
-    db_machine = crud.get_machine(db, machine_id=machine_id)
-    if db_machine is None:
-        raise HTTPException(status_code=404, detail="Machine not found")
-    return db_machine
+class SensorData(BaseModel):
+    timestamp: datetime = Field(default_factory=datetime.now)
+    machine_id: UUID
+    temperature: float
+    vibration: float
+    pressure: float
+    current: float
+    operating_hours: Optional[float] = None
+    labels: Optional[List[str]] = None # Pour des labels de données ML
 
-# --- Endpoints pour les Données de Capteurs (Sensor Data) ---
-@app.post("/sensor-data/", response_model=schemas.SensorData, status_code=status.HTTP_201_CREATED, tags=["Sensor Data"])
-def create_sensor_data(sensor_data: schemas.SensorDataCreate, db: Session = Depends(get_db)):
-    return crud.create_sensor_data(db=db, sensor_data_item=sensor_data)
+class AnomalyPrediction(BaseModel):
+    machine_id: UUID
+    timestamp: datetime = Field(default_factory=datetime.now)
+    anomaly_score: float
+    is_anomaly: bool
+    predicted_label: Optional[str] = None # Ex: 'Normal', 'Mild Fault', 'Severe Fault'
+    sensor_readings: Optional[dict] = None # Les lectures qui ont mené à la prédiction
 
-@app.post("/sensor-data/batch/", response_model=List[schemas.SensorData], status_code=status.HTTP_201_CREATED, tags=["Sensor Data"])
-def create_multiple_sensor_data(sensor_data_items: List[schemas.SensorDataCreate], db: Session = Depends(get_db)):
-    return crud.create_multiple_sensor_data(db=db, sensor_data_items=sensor_data_items)
+class Alert(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    machine_id: UUID
+    timestamp: datetime = Field(default_factory=datetime.now)
+    type: str # Ex: 'anomaly_detection', 'threshold_breach', 'predictive_maintenance'
+    severity: str # Ex: 'Avertissement', 'Critique', 'Urgence'
+    message: str
+    is_resolved: bool = False
+    details: Optional[Dict] = None
 
-@app.get("/machines/{machine_id}/sensor-data/", response_model=List[schemas.SensorData], tags=["Sensor Data"])
-def read_sensor_data_for_machine(
-    machine_id: uuid.UUID,
-    start_time: Optional[datetime] = None,
-    end_time: Optional[datetime] = None,
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
-):
-    sensor_data = crud.get_sensor_data_for_machine(
-        db, machine_id=machine_id, start_time=start_time, end_time=end_time, skip=skip, limit=limit
+class AIQuestion(BaseModel): # <-- NOUVEAU MODÈLE pour l'Assistant IA
+    question: str
+    machine_id: Optional[UUID] = None
+
+# --- Stockage en mémoire (pour la démonstration) ---
+machines_db: Dict[UUID, Machine] = {}
+sensor_data_db: Dict[UUID, deque] = {} # Chaque machine a son propre deque de données
+alerts_db: Dict[UUID, List[Alert]] = {} # Chaque machine a sa liste d'alertes
+predictions_db: Dict[UUID, List[AnomalyPrediction]] = {} # Chaque machine a ses prédictions
+
+# --- Données initiales (pour le test) ---
+def create_initial_data():
+    # Machine 1
+    machine1_id = uuid4()
+    machine1 = Machine(
+        id=machine1_id,
+        name="Broyeur Alpha",
+        location="Ligne 1",
+        type="Broyeur",
+        serial_number="BRYR-A-001",
+        installation_date=datetime.now() - timedelta(days=365),
+        thresholds_config={"temperature_critique": 85, "vibration_max": 18.5}
     )
-    if not sensor_data:
-        # Ne renvoie pas 404 si aucune donnée, juste une liste vide est acceptable
-        return []
+    machines_db[machine1_id] = machine1
+    sensor_data_db[machine1_id] = deque(maxlen=1000) # Garde les 1000 dernières entrées
+    alerts_db[machine1_id] = []
+    predictions_db[machine1_id] = []
+
+    # Machine 2
+    machine2_id = uuid4()
+    machine2 = Machine(
+        id=machine2_id,
+        name="Broyeur Alpha V4",
+        location="Ligne 1",
+        type="Broyeur V4",
+        serial_number="BRYR-V4-001",
+        installation_date=datetime.now() - timedelta(days=180),
+        thresholds_config={"temperature_critique": 80, "vibration_max": 15.0}
+    )
+    machines_db[machine2_id] = machine2
+    sensor_data_db[machine2_id] = deque(maxlen=1000)
+    alerts_db[machine2_id] = []
+    predictions_db[machine2_id] = []
+
+    logging.info(f"Initialised with {len(machines_db)} machines.")
+
+# Appeler la fonction d'initialisation au démarrage
+create_initial_data()
+
+# --- Endpoints de l'API ---
+
+@app.get("/")
+async def read_root():
+    return {"message": "Bienvenue sur l'API de Maintenance Prédictive Industrielle"}
+
+@app.get("/machines/", response_model=List[Machine])
+async def get_machines():
+    return list(machines_db.values())
+
+@app.get("/machines/{machine_id}", response_model=Machine)
+async def get_machine(machine_id: UUID):
+    if machine_id not in machines_db:
+        raise HTTPException(status_code=404, detail="Machine non trouvée")
+    return machines_db[machine_id]
+
+@app.post("/sensor-data/", response_model=SensorData, status_code=status.HTTP_201_CREATED)
+async def create_sensor_data(sensor_data: SensorData):
+    if sensor_data.machine_id not in machines_db:
+        raise HTTPException(status_code=404, detail="Machine non trouvée")
+    
+    if sensor_data.machine_id not in sensor_data_db:
+        sensor_data_db[sensor_data.machine_id] = deque(maxlen=1000)
+    sensor_data_db[sensor_data.machine_id].append(sensor_data)
+    logging.info(f"Sensor data received for machine {sensor_data.machine_id}: {sensor_data.temperature}°C, {sensor_data.vibration} vib")
     return sensor_data
 
-# --- Endpoints pour les Alertes ---
-@app.post("/alerts/", response_model=schemas.Alert, status_code=status.HTTP_201_CREATED, tags=["Alerts"])
-def create_alert(alert: schemas.AlertCreate, db: Session = Depends(get_db)):
-    # Ici, on pourrait ajouter une logique pour vérifier l'existence de la machine_id
-    db_machine = crud.get_machine(db, machine_id=alert.machine_id)
-    if not db_machine:
-        raise HTTPException(status_code=404, detail="Machine not found for this alert")
-    return crud.create_alert(db=db, alert_item=alert)
-
-@app.get("/machines/{machine_id}/alerts/", response_model=List[schemas.Alert], tags=["Alerts"])
-def read_alerts_for_machine(
-    machine_id: uuid.UUID,
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
+@app.get("/machines/{machine_id}/sensor-data/", response_model=List[SensorData])
+async def get_machine_sensor_data(
+    machine_id: UUID,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    limit: int = 100
 ):
-    alerts = crud.get_alerts_for_machine(db, machine_id=machine_id, skip=skip, limit=limit)
-    return alerts
+    if machine_id not in sensor_data_db:
+        raise HTTPException(status_code=404, detail="Aucune donnée de capteur pour cette machine")
 
-@app.post("/predict-anomaly/", tags=["Machine Learning"], summary="Predict anomaly for a single sensor data point")
-def predict_anomaly(sensor_data: schemas.SensorDataCreate, db: Session = Depends(get_db)):
-    # Convertir le Pydantic model en DataFrame pour le modèle ML
-    # On ne prend que les features utilisées par le modèle
-    data_for_prediction = pd.DataFrame([sensor_data.dict(include={'temperature', 'vibration', 'pressure', 'current'})])
-
-    prediction = ml_models.predict_anomaly(data_for_prediction)
-
-    if prediction is None:
-        raise HTTPException(status_code=500, detail="ML model not loaded or internal error during prediction.")
-
-    # -1 signifie anomalie, 1 signifie normal
-    is_anomaly = (prediction == -1)
+    all_data = list(sensor_data_db[machine_id])
     
-    # Optionnel: Si une anomalie est détectée, créer une alerte
-    if is_anomaly:
-        # Créer une alerte dans la DB
-        alert_message = f"Anomaly detected for machine {sensor_data.machine_id} at {sensor_data.timestamp.isoformat()}"
-        new_alert = schemas.AlertCreate(
-            machine_id=sensor_data.machine_id,
-            timestamp=sensor_data.timestamp,
-            type="anomaly_detection",
-            severity="Avertissement", # Peut être ajusté en fonction de la confiance du modèle ou d'autres règles
-            message=alert_message
-        )
-        crud.create_alert(db, new_alert) # Enregistre l'alerte dans la DB
+    # Filtrer par temps
+    if start_time:
+        all_data = [d for d in all_data if d.timestamp >= start_time]
+    if end_time:
+        all_data = [d for d in all_data if d.timestamp <= end_time]
+    
+    # Trier par timestamp (le plus récent en premier) et limiter
+    sorted_data = sorted(all_data, key=lambda x: x.timestamp, reverse=True)
+    
+    return sorted_data[:limit]
+
+
+@app.post("/predict-anomaly/", response_model=AnomalyPrediction)
+async def predict_anomaly(data: SensorData):
+    logging.info(f"Received data for anomaly prediction for machine {data.machine_id}")
+
+    # --- SIMULATION DE LA PRÉDICTION D'ANOMALIE ---
+    # Ici, vous intégreriez votre modèle ML réel.
+    # Pour la démonstration, nous allons créer une logique simple basée sur des seuils
+    # et générer une alerte si une anomalie est détectée.
+
+    if data.machine_id not in machines_db:
+        raise HTTPException(status_code=404, detail="Machine non trouvée pour la prédiction")
+
+    machine = machines_db[data.machine_id]
+    is_anomaly = False
+    anomaly_score = 0.0
+    message = "Données normales."
+    severity = "Avertissement" # Default, will be overridden
+
+    # Exemple de logique d'anomalie simplifiée
+    if data.temperature > machine.thresholds_config.get("temperature_critique", 90): # Ex: 90°C
+        is_anomaly = True
+        anomaly_score += 0.6
+        message = f"Température ({data.temperature}°C) dépasse le seuil critique ({machine.thresholds_config.get('temperature_critique', 'N/A')}°C)."
+        severity = "Critique"
+    
+    if data.vibration > machine.thresholds_config.get("vibration_max", 20.0): # Ex: 20.0
+        is_anomaly = True
+        anomaly_score += 0.4
+        if message == "Données normales.":
+            message = f"Vibration ({data.vibration}) dépasse le seuil maximal ({machine.thresholds_config.get('vibration_max', 'N/A')})."
+        else:
+            message += f" Et vibration ({data.vibration}) dépasse le seuil maximal ({machine.thresholds_config.get('vibration_max', 'N/A')})."
         
-    return {"machine_id": sensor_data.machine_id, "is_anomaly": bool(is_anomaly), "prediction_score": float(prediction)}
+        if anomaly_score > 0.8: # Si les deux sont en anomalie, c'est plus grave
+            severity = "Urgence"
+        elif severity != "Urgence":
+            severity = "Critique"
+            
+    if is_anomaly:
+        anomaly_score = min(anomaly_score, 1.0) # Cap at 1.0
 
-@app.get("/alerts/unresolved/", response_model=List[schemas.Alert], tags=["Alerts"])
-def read_unresolved_alerts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    alerts = crud.get_unresolved_alerts(db, skip=skip, limit=limit)
-    return alerts
+        # Créer une alerte si une anomalie est détectée
+        new_alert = Alert(
+            machine_id=data.machine_id,
+            type="anomaly_detection",
+            severity=severity,
+            message=message,
+            details=data.dict()
+        )
+        if data.machine_id not in alerts_db:
+            alerts_db[data.machine_id] = []
+        alerts_db[data.machine_id].append(new_alert)
+        logging.warning(f"Alerte générée pour {data.machine_id}: {message}")
 
-# --- Endpoints pour les Utilisateurs (sera étendu avec authentification) ---
-@app.post("/users/", response_model=schemas.User, status_code=status.HTTP_201_CREATED, tags=["Users"])
-def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    db_user = crud.get_user_by_email(db, email=user.email)
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    return crud.create_user(db=db, user=user)
+    prediction = AnomalyPrediction(
+        machine_id=data.machine_id,
+        anomaly_score=anomaly_score,
+        is_anomaly=is_anomaly,
+        predicted_label="Anomaly" if is_anomaly else "Normal",
+        sensor_readings=data.dict() # Enregistre les lectures pour référence
+    )
+    if data.machine_id not in predictions_db:
+        predictions_db[data.machine_id] = []
+    predictions_db[data.machine_id].append(prediction)
+    return prediction
 
-@app.get("/users/", response_model=List[schemas.User], tags=["Users"])
-def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    users = crud.get_users(db, skip=skip, limit=limit) # Il manque get_users dans crud.py, ajoutons-le
-    return users
+@app.get("/machines/{machine_id}/alerts/", response_model=List[Alert])
+async def get_machine_alerts(
+    machine_id: UUID,
+    include_resolved: bool = False,
+    limit: int = 50
+):
+    if machine_id not in alerts_db:
+        return [] # Pas d'alertes pour cette machine
 
-@app.get("/users/{user_id}", response_model=schemas.User, tags=["Users"])
-def read_user(user_id: uuid.UUID, db: Session = Depends(get_db)):
-    db_user = crud.get_user(db, user_id=user_id)
-    if db_user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return db_user
+    all_alerts = list(alerts_db[machine_id]) # Convertir deque en list si c'est un deque
+
+    if not include_resolved:
+        all_alerts = [alert for alert in all_alerts if not alert.is_resolved]
+
+    # Tri par timestamp (le plus récent en premier)
+    sorted_alerts = sorted(all_alerts, key=lambda x: x.timestamp, reverse=True)
+    return sorted_alerts[:limit]
+
+@app.post("/alerts/{alert_id}/resolve/", response_model=Alert)
+async def resolve_alert(alert_id: UUID):
+    # Chercher l'alerte dans toutes les listes de machines
+    for machine_id in alerts_db:
+        for alert in alerts_db[machine_id]:
+            if alert.id == alert_id:
+                alert.is_resolved = True
+                logging.info(f"Alert {alert_id} resolved.")
+                return alert
+    raise HTTPException(status_code=404, detail="Alerte non trouvée")
+
+
+# --- Endpoint de l'Assistant IA ---
+@app.post("/ai-assistant/", response_model=dict, tags=["AI Assistant"])
+async def ask_ai(question_data: AIQuestion): # <-- Implémentation corrigée et statique
+    logging.info(f"Received AI question: {question_data.question} for machine {question_data.machine_id}")
+    
+    # Ceci est une implémentation simulée.
+    # Dans un cas réel, vous feriez appel à votre modèle LLM (ex: OpenAI, Llama, etc.)
+    # en lui passant la question et éventuellement le machine_id pour un contexte spécifique.
+    
+    question_lower = question_data.question.lower()
+    answer = ""
+
+    if "risque" in question_lower or "probabilité de panne" in question_lower:
+        answer = "La machine Broyeur Alpha V4 présente un risque modéré de panne dû à des vibrations légèrement élevées. La probabilité de panne cette semaine est estimée à 15%."
+    elif "alertes" in question_lower:
+        # Ici, vous pourriez interroger alerts_db pour des alertes réelles
+        machine_alerts_count = 0
+        if question_data.machine_id and question_data.machine_id in alerts_db:
+            machine_alerts_count = len([a for a in alerts_db[question_data.machine_id] if not a.is_resolved])
+        
+        if machine_alerts_count > 0:
+            answer = f"Il y a actuellement {machine_alerts_count} alerte(s) active(s) pour la machine {'sélectionnée' if question_data.machine_id else 'en général'}. La plupart concernent des détections d'anomalies de vibration."
+        else:
+            answer = "Il n'y a pas d'alertes actives pour le moment. Tout semble fonctionner correctement."
+    elif "bonjour" in question_lower or "salut" in question_lower:
+        answer = "Bonjour ! Je suis votre assistant IA pour la maintenance prédictive. Comment puis-je vous aider ?"
+    elif "aide" in question_lower:
+        answer = "Je peux répondre à des questions sur le statut des machines, les risques de panne, les alertes, ou vous fournir des informations générales sur la maintenance prédictive. Essayez 'Quelle est la machine la plus à risque ?'"
+    else:
+        answer = f"Je n'ai pas de réponse spécifique à votre question : '{question_data.question}'. Mon développement est en cours, mais je peux vous assurer que toutes les machines sont sous surveillance constante."
+    
+    # Simuler un délai de traitement de l'IA pour une meilleure UX
+    await asyncio.sleep(1.5) 
+
+    return {"answer": answer}
