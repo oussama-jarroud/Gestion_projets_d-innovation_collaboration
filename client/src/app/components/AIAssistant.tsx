@@ -2,8 +2,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { PaperAirplaneIcon, SparklesIcon } from '@heroicons/react/24/solid'; // Icônes
-import { Transition } from '@headlessui/react'; // Pour les animations
+import { PaperAirplaneIcon, SparklesIcon } from '@heroicons/react/24/solid';
+import { Transition } from '@headlessui/react';
 
 interface Message {
   id: string;
@@ -15,7 +15,6 @@ interface Message {
 interface Machine {
   id: string;
   name: string;
-  // ... autres champs si nécessaire pour le contexte
 }
 
 interface AIAssistantProps {
@@ -30,12 +29,10 @@ export default function AIAssistant({ selectedMachine }: AIAssistantProps) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom whenever messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Message de bienvenue ou de contexte quand la machine change
   useEffect(() => {
     if (selectedMachine) {
       setMessages([
@@ -103,18 +100,18 @@ export default function AIAssistant({ selectedMachine }: AIAssistantProps) {
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault(); // Empêche le saut de ligne dans le textarea si c'était le cas
+      e.preventDefault();
       sendMessage();
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-800 shadow rounded-lg">
-      <div className="flex items-center p-4 border-b border-gray-200 dark:border-gray-700 bg-indigo-600 rounded-t-lg">
+    <div className="flex flex-col h-full bg-gray-800 rounded-lg"> {/* bg-gray-800 ici */}
+      <div className="flex items-center p-4 border-b border-gray-700 bg-indigo-600 rounded-t-lg">
         <SparklesIcon className="h-6 w-6 text-white mr-3" />
         <h2 className="text-xl font-semibold text-white">Assistant IA</h2>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"> {/* Ajout de custom-scrollbar */}
         {messages.map((msg) => (
           <Transition
             key={msg.id}
@@ -135,11 +132,11 @@ export default function AIAssistant({ selectedMachine }: AIAssistantProps) {
                 className={`max-w-[70%] p-3 rounded-lg shadow-md ${
                   msg.sender === 'user'
                     ? 'bg-indigo-500 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+                    : 'bg-gray-700 text-gray-100' // Dark mode pour l'IA
                 }`}
               >
                 <p dangerouslySetInnerHTML={{ __html: (msg.text || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}></p>
-                <span className="block text-right text-xs mt-1 opacity-75">
+                <span className="block text-right text-xs mt-1 text-gray-400"> {/* Texte plus clair */}
                   {msg.timestamp.toLocaleTimeString()}
                 </span>
               </div>
@@ -148,7 +145,7 @@ export default function AIAssistant({ selectedMachine }: AIAssistantProps) {
         ))}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="max-w-[70%] p-3 rounded-lg shadow-md bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            <div className="max-w-[70%] p-3 rounded-lg shadow-md bg-gray-700 text-gray-100">
               <div className="flex items-center">
                 <div className="h-2 w-2 bg-gray-500 rounded-full animate-bounce mr-1"></div>
                 <div className="h-2 w-2 bg-gray-500 rounded-full animate-bounce delay-150 mr-1"></div>
@@ -159,10 +156,10 @@ export default function AIAssistant({ selectedMachine }: AIAssistantProps) {
         )}
         <div ref={messagesEndRef} />
       </div>
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center">
+      <div className="p-4 border-t border-gray-700 flex items-center">
         <input
           type="text"
-          className="flex-1 p-3 rounded-l-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="flex-1 p-3 rounded-l-lg border border-gray-600 bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           placeholder="Posez une question à l'IA..."
           value={input}
           onChange={(e) => setInput(e.target.value)}

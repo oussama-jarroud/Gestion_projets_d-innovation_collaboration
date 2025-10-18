@@ -1,8 +1,10 @@
-'use client'; // Assurez-vous que c'est un client component
+'use client';
 
-import React, { useState } from 'react';
-import MachineList from '@/app/components/MachineList';
-import AIAssistant from '@/app/components/AIAssistant'; // Importez le nouvel assistant IA
+import React, { useState, useEffect } from 'react';
+import MachineCard from '@/app/components/MachineCard'; // Renommer pour mieux correspondre à l'affichage
+import AIAssistant from '@/app/components/AIAssistant';
+import MachineDetailsContent from '@/app/components/MachineDetailsContent'; // Nouveau composant pour les détails
+import axios from 'axios';
 
 interface Machine {
   id: string;
@@ -13,50 +15,90 @@ interface Machine {
   thresholds_config?: { [key: string]: any };
 }
 
-export default function Home() {
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+
+export default function DashboardPage() { // Renommé de Home à DashboardPage
+  const [machines, setMachines] = useState<Machine[]>([]);
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchMachines = async () => {
+      try {
+        const response = await axios.get<Machine[]>(`${API_BASE_URL}/machines/`);
+        setMachines(response.data);
+        if (response.data.length > 0) {
+          setSelectedMachine(response.data[0]); // Sélectionne la première machine par défaut
+        }
+      } catch (err) {
+        console.error('Failed to fetch machines:', err);
+        setError('Impossible de charger la liste des machines.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMachines();
+  }, []);
+
+  if (loading) return <p className="text-center text-lg mt-4 text-gray-300">Chargement des machines...</p>;
+  if (error) return <p className="text-center text-lg text-red-500 mt-4">{error}</p>;
+  if (machines.length === 0) return <p className="text-center text-lg mt-4 text-gray-300">Aucune machine enregistrée.</p>;
+
 
   return (
-    <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      {/* Sidebar de navigation ou liste de machines principale */}
-      <aside className="w-64 p-4 bg-white dark:bg-gray-800 shadow-lg border-r border-gray-200 dark:border-gray-700 flex flex-col">
-        <h1 className="text-2xl font-bold mb-6 text-indigo-700 dark:text-indigo-400">
-          Prédicteur Pro
-        </h1>
-        <nav className="flex-1">
-          {/* Ici, vous pouvez ajouter d'autres liens de navigation si besoin */}
-          <a
-            href="#"
-            className="flex items-center px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-indigo-100 dark:hover:bg-indigo-700 rounded-lg transition-colors duration-200"
-          >
-            <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
-            </svg>
-            Tableau de bord
-          </a>
-          {/* Ajoutez d'autres éléments de menu ici */}
-        </nav>
-        {/* Pied de page ou informations utilisateur */}
-        <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-500 dark:text-gray-400">Version 1.0</p>
+    <div className="grid grid-cols-12 gap-6 h-full">
+      {/* Colonne gauche pour la liste des machines */}
+      <div className="col-span-2 flex flex-col overflow-hidden bg-gray-800 rounded-lg shadow-lg p-4">
+        <h2 className="text-xl font-semibold mb-4 text-indigo-400">Machines</h2>
+        <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar"> {/* Ajout de custom-scrollbar */}
+          {machines.map((machine) => (
+            <MachineCard
+              key={machine.id}
+              machine={machine}
+              onClick={() => setSelectedMachine(machine)}
+              isSelected={selectedMachine?.id === machine.id}
+            />
+          ))}
         </div>
-      </aside>
+      </div>
 
-      {/* Contenu principal (liste des machines et détails) */}
-      <main className="flex-1 p-8 overflow-y-auto">
-        <h1 className="text-4xl font-bold mb-8 text-indigo-700 dark:text-indigo-400">
-          Surveillance Prédictive Industrielle
-        </h1>
-        <div className="w-full">
-          {/* Passez setSelectedMachine à MachineList */}
-          <MachineList onSelectMachine={setSelectedMachine} selectedMachineId={selectedMachine?.id} />
+      {/* Colonne centrale pour les détails de la machine et le graphique */}
+      <div className="col-span-7 flex flex-col space-y-6">
+        {selectedMachine ? (
+          <MachineDetailsContent machine={selectedMachine} />
+        ) : (
+          <div className="flex items-center justify-center h-full bg-gray-800 rounded-lg shadow-lg">
+            <p className="text-gray-400 text-lg">Sélectionnez une machine pour voir ses détails.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Colonne droite pour l'Assistant IA et les KPIs */}
+      <div className="col-span-3 flex flex-col space-y-6">
+        {/* KPIs (simulé pour l'instant) */}
+        <div className="bg-gray-800 rounded-lg shadow-lg p-4 h-64 flex flex-col justify-center items-center">
+          <h3 className="text-xl font-semibold mb-4 text-indigo-400">Indicateurs Clés (KPI)</h3>
+          <div className="flex justify-around w-full mb-4">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-red-400">78% ↓</p>
+              <p className="text-sm text-gray-400">Coûts Maintenance Réduits</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-bold text-green-400">15% ↑</p>
+              <p className="text-sm text-gray-400">Pannes Évitées</p>
+            </div>
+          </div>
+          <p className="text-sm text-gray-500">
+            (Ces valeurs sont actuellement simulées pour démonstration)
+          </p>
         </div>
-      </main>
-
-      {/* Sidebar de l'Assistant IA */}
-      <aside className="w-[400px] p-4 bg-white dark:bg-gray-800 shadow-lg border-l border-gray-200 dark:border-gray-700 flex flex-col">
-        <AIAssistant selectedMachine={selectedMachine} />
-      </aside>
+        {/* Assistant IA */}
+        <div className="flex-1 bg-gray-800 rounded-lg shadow-lg">
+          <AIAssistant selectedMachine={selectedMachine} />
+        </div>
+      </div>
     </div>
   );
 }
