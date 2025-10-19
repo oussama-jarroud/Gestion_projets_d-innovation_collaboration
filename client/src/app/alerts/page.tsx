@@ -62,7 +62,7 @@ export default function AlertsPage() {
 
   const handleResolveAlert = async (id: string) => {
     try {
-      await axios.put(`${API_BASE_URL}/alerts/${id}/resolve`);
+      await axios.post(`${API_BASE_URL}/alerts/${id}/resolve`);
       setAlerts(prevAlerts => prevAlerts.map(alert =>
         alert.id === id ? { ...alert, is_resolved: true } : alert
       ));

@@ -1,14 +1,14 @@
 import logging
 import asyncio
 from uuid import UUID, uuid4
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Deque
+from datetime import datetime, timedelta, timezone
+from typing import List, Dict, Optional, Deque, Any
 from collections import deque
 import random
 
-from fastapi import FastAPI, HTTPException, Body, Response, status, Request
+from fastapi import FastAPI, HTTPException, Body, Response, status, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, ValidationError # Import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 # Configure logging
@@ -35,6 +35,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- Modèles de données Pydantic (utilisateurs) ---
 class UserBase(BaseModel):
     name: str
     email: str
@@ -49,13 +51,13 @@ class UserUpdate(UserBase):
 
 class UserInDB(UserBase):
     id: UUID = Field(default_factory=uuid4)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Config:
         from_attributes = True
         json_encoders = {
-            UUID: str # Pour sérialiser l'UUID en string lors du renvoi JSON
+            UUID: str
         }
 
 # Base de données simple en mémoire pour les utilisateurs (pour le moment)
@@ -68,8 +70,8 @@ db_users.append(UserInDB(
     email="alice@example.com",
     role="Administrateur",
     status="Actif",
-    created_at=datetime.utcnow(),
-    updated_at=datetime.utcnow()
+    created_at=datetime.now(timezone.utc),
+    updated_at=datetime.now(timezone.utc)
 ))
 db_users.append(UserInDB(
     id=uuid4(),
@@ -77,8 +79,8 @@ db_users.append(UserInDB(
     email="bob@example.com",
     role="Ingénieur",
     status="Actif",
-    created_at=datetime.utcnow(),
-    updated_at=datetime.utcnow()
+    created_at=datetime.now(timezone.utc),
+    updated_at=datetime.now(timezone.utc)
 ))
 db_users.append(UserInDB(
     id=uuid4(),
@@ -86,12 +88,11 @@ db_users.append(UserInDB(
     email="charlie@example.com",
     role="Technicien",
     status="Actif",
-    created_at=datetime.utcnow(),
-    updated_at=datetime.utcnow()
+    created_at=datetime.now(timezone.utc),
+    updated_at=datetime.now(timezone.utc)
 ))
 
-
-# Routes pour les utilisateurs
+# --- Routes pour les utilisateurs ---
 @app.get("/users/", response_model=List[UserInDB], tags=["Users"])
 async def read_users():
     return db_users
@@ -104,8 +105,8 @@ async def create_user(user: UserCreate):
         email=user.email,
         role=user.role,
         status=user.status,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
     )
     db_users.append(new_user)
     return new_user
@@ -115,59 +116,63 @@ async def update_user(user_id: UUID, user_update: UserUpdate):
     for idx, existing_user in enumerate(db_users):
         if existing_user.id == user_id:
             updated_user_data = user_update.model_dump(exclude_unset=True)
-            # Mise à jour des champs
             for key, value in updated_user_data.items():
                 setattr(existing_user, key, value)
-            existing_user.updated_at = datetime.utcnow()
+            existing_user.updated_at = datetime.now(timezone.utc)
             return existing_user
     raise HTTPException(status_code=404, detail="User not found")
 
 @app.delete("/users/{user_id}", status_code=204, tags=["Users"])
 async def delete_user(user_id: UUID):
-    global db_users # Important pour modifier la liste globale
+    global db_users
     initial_len = len(db_users)
     db_users = [user for user in db_users if user.id != user_id]
     if len(db_users) == initial_len:
         raise HTTPException(status_code=404, detail="User not found")
     return Response(status_code=204)
 
-# --- Modèles de données Pydantic ---
+# --- Modèles de données Pydantic (machines, capteurs, alertes) ---
 class Machine(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     name: str
     location: str
     type: str
     serial_number: str
-    installation_date: datetime = Field(default_factory=datetime.now)
+    installation_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     status: str = "Active"
-    last_maintenance: datetime = Field(default_factory=datetime.now)
-    # Seuils pour la détection d'anomalies (peuvent être plus complexes)
+    last_maintenance: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     thresholds_config: Dict[str, float] = Field(default_factory=dict)
 
-class SensorData(BaseModel):
-    timestamp: datetime = Field(default_factory=datetime.now)
-    machine_id: UUID
+class SensorDataPoint(BaseModel):
+    # AJOUT DE machine_id ICI
+    machine_id: UUID 
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     temperature: float
     vibration: float
     pressure: float
     current: float
     operating_hours: Optional[float] = None
-    labels: Optional[List[str]] = None # Pour des labels de données ML
+    labels: Optional[List[str]] = None 
+
+
+# UNIFICATION des variables de stockage pour les données de capteurs
+sensor_data_db: Dict[UUID, Deque[SensorDataPoint]] = {} # Utilisation de UUID comme clé
+
 
 class AnomalyPrediction(BaseModel):
     machine_id: UUID
-    timestamp: datetime = Field(default_factory=datetime.now)
-    anomaly_score: float # Score entre 0 et 1
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    anomaly_score: float
     is_anomaly: bool
-    predicted_label: Optional[str] = None # Ex: 'Normal', 'Mild Fault', 'Severe Fault'
-    sensor_readings: Optional[dict] = None # Les lectures qui ont mené à la prédiction
+    predicted_label: Optional[str] = None
+    sensor_readings: Optional[dict] = None
 
 class Alert(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     machine_id: UUID
-    timestamp: datetime = Field(default_factory=datetime.now)
-    type: str # Ex: 'anomaly_detection', 'threshold_breach', 'predictive_maintenance'
-    severity: str # Ex: 'Avertissement', 'Critique', 'Urgence'
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    type: str
+    severity: str
     message: str
     is_resolved: bool = False
     details: Optional[Dict] = None
@@ -176,12 +181,27 @@ class AIQuestion(BaseModel):
     question: str
     machine_id: Optional[UUID] = None
 
+# --- NOUVEAU: Modèle de données Pydantic pour les Modèles ML ---
+class MLModel(BaseModel):
+    id: str
+    name: str
+    algorithm: str
+    version: str
+    status: str
+    last_trained: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    performance_score: Optional[float] = None
+    deployed_machines_count: Optional[int] = None
+    training_logs: List[str] = Field(default_factory=list)
+    evaluation_metrics: Dict[str, float] = Field(default_factory=dict)
+    hyperparameters: Dict[str, Any] = Field(default_factory=dict)
+    feature_importance: Dict[str, float] = Field(default_factory=dict)
+
 # --- Stockage en mémoire (pour la démonstration) ---
-# Utilisation de Deque pour les données de capteurs afin de maintenir une taille fixe
 machines_db: Dict[UUID, Machine] = {}
-sensor_data_db: Dict[UUID, Deque[SensorData]] = {}
+# sensor_data_db: Dict[UUID, Deque[SensorDataPoint]] = {}  <-- Déjà déclaré globalement plus haut
 alerts_db: Dict[UUID, List[Alert]] = {}
 predictions_db: Dict[UUID, List[AnomalyPrediction]] = {}
+db_ml_models: Dict[str, MLModel] = {}
 
 # --- Données initiales (pour le test) ---
 def create_initial_data():
@@ -195,11 +215,11 @@ def create_initial_data():
         location="Ligne 1",
         type="Broyeur",
         serial_number="BRYR-A-001",
-        installation_date=datetime.now() - timedelta(days=365),
+        installation_date=datetime.now(timezone.utc) - timedelta(days=365),
         thresholds_config={"temperature_critique": 85.0, "vibration_max": 18.5, "pressure_max": 5.0, "current_max": 25.0}
     )
     machines_db[machine1_id] = machine1
-    sensor_data_db[machine1_id] = deque(maxlen=1000) # Garde les 1000 dernières entrées
+    sensor_data_db[machine1_id] = deque(maxlen=1000)
     alerts_db[machine1_id] = []
     predictions_db[machine1_id] = []
 
@@ -211,7 +231,7 @@ def create_initial_data():
         location="Ligne 2",
         type="Presse Hydraulique",
         serial_number="PRES-B-002",
-        installation_date=datetime.now() - timedelta(days=180),
+        installation_date=datetime.now(timezone.utc) - timedelta(days=180),
         thresholds_config={"temperature_critique": 80.0, "vibration_max": 15.0, "pressure_max": 6.5, "current_max": 30.0}
     )
     machines_db[machine2_id] = machine2
@@ -227,7 +247,7 @@ def create_initial_data():
         location="Ligne 3",
         type="Convoyeur",
         serial_number="CNVY-G-003",
-        installation_date=datetime.now() - timedelta(days=90),
+        installation_date=datetime.now(timezone.utc) - timedelta(days=90),
         thresholds_config={"temperature_critique": 70.0, "vibration_max": 10.0, "pressure_max": 3.0, "current_max": 18.0}
     )
     machines_db[machine3_id] = machine3
@@ -237,10 +257,87 @@ def create_initial_data():
 
     logging.info(f"Initialised with {len(machines_db)} machines.")
 
+    logging.info("Creating initial ML models data...")
+    db_ml_models["model_1"] = MLModel(
+        id="model_1",
+        name="Détection d'Anomalies de Température",
+        algorithm="Random Forest",
+        version="1.2.0",
+        status="Actif",
+        last_trained=datetime(2023, 10, 26, 10, 0, 0, tzinfo=timezone.utc),
+        performance_score=0.92,
+        deployed_machines_count=5,
+        evaluation_metrics={"accuracy": 0.92, "precision": 0.88, "recall": 0.95},
+        hyperparameters={"n_estimators": 100, "max_depth": 10},
+        training_logs=["2023-10-26 10:00:00 - Début de l'entraînement...", "2023-10-26 10:45:00 - Entraînement terminé avec succès."],
+        feature_importance={"temp_avg": 0.3, "vib_max": 0.25, "press_std": 0.15}
+    )
+    db_ml_models["model_2"] = MLModel(
+        id="model_2",
+        name="Prédiction de Défaillance Vibratoire",
+        algorithm="XGBoost",
+        version="2.1.0",
+        status="Actif",
+        last_trained=datetime(2023, 10, 25, 14, 30, 0, tzinfo=timezone.utc),
+        performance_score=0.88,
+        deployed_machines_count=3,
+        evaluation_metrics={"roc_auc": 0.91, "f1_score": 0.89},
+        hyperparameters={"learning_rate": 0.1, "n_estimators": 200},
+        training_logs=["2023-10-25 14:30:00 - Démarrage de l'entraînement XGBoost...", "2023-10-25 15:10:00 - Validation du modèle réussie."],
+        feature_importance={"vib_freq_bands": 0.4, "temp_trend": 0.2}
+    )
+    db_ml_models["model_3"] = MLModel(
+        id="model_3",
+        name="Prédiction de Durée de Vie Restante (RUL)",
+        algorithm="LSTM Network",
+        version="1.0.0",
+        status="Entraînement",
+        last_trained=datetime(2023, 10, 27, 8, 15, 0, tzinfo=timezone.utc),
+        performance_score=None,
+        deployed_machines_count=0,
+        training_logs=["2023-10-27 08:15:00 - Initialisation de l'entraînement LSTM...", "2023-10-27 08:30:00 - Epoch 5/50 completed."],
+        hyperparameters={"hidden_units": 64, "epochs": 50, "batch_size": 32}
+    )
+    db_ml_models["model_4"] = MLModel(
+        id="model_4",
+        name="Détection de Surchauffe Moteur",
+        algorithm="Isolation Forest",
+        version="1.1.0",
+        status="Erreur",
+        last_trained=datetime(2023, 10, 24, 11, 0, 0, tzinfo=timezone.utc),
+        performance_score=0.75,
+        deployed_machines_count=2,
+        training_logs=["2023-10-24 11:00:00 - Tentative d'entraînement Isolation Forest.", "2023-10-24 11:05:00 - Erreur: Données d'entraînement manquantes."],
+        hyperparameters={"contamination": 0.1}
+    )
+    logging.info(f"Initialised with {len(db_ml_models)} ML models.")
+
+
 # Appeler la fonction d'initialisation au démarrage
 @app.on_event("startup")
 async def startup_event():
     create_initial_data()
+    logging.info("Starting sensor data simulator...")
+    asyncio.create_task(simulate_sensor_data())
+
+
+# La fonction simulate_sensor_data_for_machine n'est pas utilisée ici, car simulate_sensor_data
+# s'occupe de toutes les machines. Si vous voulez des données statiques au démarrage,
+# il faudrait l'appeler dans create_initial_data. Je la laisse commentée.
+# def simulate_sensor_data_for_machine(machine_id: UUID): # Correction du type ici aussi
+#     # Générez des données simulées pour cette machine
+#     if machine_id not in sensor_data_db:
+#         sensor_data_db[machine_id] = deque(maxlen=1000)
+    
+#     if not sensor_data_db[machine_id]: # Add only if empty for first test
+#         sensor_data_db[machine_id].append(SensorDataPoint(
+#             machine_id=machine_id, # IMPORTANT : ajouter machine_id
+#             timestamp=datetime.now(timezone.utc),
+#             temperature=random.uniform(20, 30),
+#             vibration=random.uniform(0.5, 2.5),
+#             pressure=random.uniform(5.0, 15.0),
+#             current=random.uniform(1.0, 10.0)
+#         ))
 
 # --- Endpoints de l'API ---
 
@@ -264,58 +361,60 @@ async def get_machine(machine_id: UUID):
         raise HTTPException(status_code=404, detail="Machine non trouvée")
     return machines_db[machine_id]
 
-@app.post("/sensor-data/", response_model=SensorData, status_code=status.HTTP_201_CREATED, tags=["Sensor Data"])
-async def create_sensor_data(sensor_data: SensorData):
+# Correction de la route pour créer des données de capteurs
+@app.post("/sensor-data/", response_model=SensorDataPoint, status_code=status.HTTP_201_CREATED, tags=["Sensor Data"])
+async def create_sensor_data(sensor_data_point: SensorDataPoint): # Renommé l'argument
     """
     Enregistre de nouvelles données de capteurs pour une machine.
     """
-    if sensor_data.machine_id not in machines_db:
+    if sensor_data_point.machine_id not in machines_db:
         raise HTTPException(status_code=404, detail="Machine non trouvée")
 
-    if sensor_data.machine_id not in sensor_data_db:
-        sensor_data_db[sensor_data.machine_id] = deque(maxlen=1000)
-    sensor_data_db[sensor_data.machine_id].append(sensor_data)
-    logging.info(f"Sensor data received for machine {sensor_data.machine_id}: T={sensor_data.temperature}°C, V={sensor_data.vibration} vib")
+    if sensor_data_point.machine_id not in sensor_data_db:
+        sensor_data_db[sensor_data_point.machine_id] = deque(maxlen=1000)
+    sensor_data_db[sensor_data_point.machine_id].append(sensor_data_point)
+    logging.info(f"Sensor data received for machine {sensor_data_point.machine_id}: T={sensor_data_point.temperature}°C, V={sensor_data_point.vibration} vib")
     
-    # Appel asynchrone pour la prédiction d'anomalie
-    # Cela évite de bloquer la réponse de l'API
-    asyncio.create_task(predict_anomaly_internal(sensor_data))
+    asyncio.create_task(predict_anomaly_internal(sensor_data_point))
     
-    return sensor_data
+    return sensor_data_point
 
-@app.get("/machines/{machine_id}/sensor-data/", response_model=List[SensorData], tags=["Sensor Data"])
+@app.get("/machines/{machine_id}/sensor-data/", response_model=List[SensorDataPoint])
 async def get_machine_sensor_data(
-    machine_id: UUID,
+    machine_id: UUID, 
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
-    limit: int = 100
+    limit: int = 500
 ):
+    logging.info(f"Fetching sensor data for machine_id: {machine_id}")
     """
     Récupère les données de capteurs pour une machine spécifique, avec options de filtrage temporel et de limitation.
     """
-    if machine_id not in sensor_data_db or not sensor_data_db[machine_id]:
-        # Retourne une liste vide si pas de données pour éviter 404 non nécessaire
-        return [] 
+    # CORRECTION: Vérifie si la machine existe AVANT d'essayer d'accéder à ses données
+    if machine_id not in machines_db:
+        raise HTTPException(status_code=404, detail="Machine non trouvée")
 
-    all_data = list(sensor_data_db[machine_id])
+    # CORRECTION: Utilise .get() pour éviter KeyError si pas de données pour cette machine
+    all_data = list(sensor_data_db.get(machine_id, []))
 
-    # Filtrer par temps
+    if not all_data: # Si aucune donnée, retourne vide
+        return []
+
     if start_time:
         all_data = [d for d in all_data if d.timestamp >= start_time]
     if end_time:
         all_data = [d for d in all_data if d.timestamp <= end_time]
 
-    # Trier par timestamp (le plus récent en premier) et limiter
-    sorted_data = sorted(all_data, key=lambda x: x.timestamp, reverse=True)
+    sorted_data = sorted(all_data, key=lambda x: x.timestamp) # Correction: tri ascendant pour le graphique
+    
+    # Retourne les 'limit' dernières entrées si l'utilisateur demande les plus récentes
+    # Si le graphique s'attend aux plus anciennes en premier, sorted_data[:limit] est mieux
+    return sorted_data[-limit:] 
 
-    return sorted_data[:limit]
 
-
-# Fonction interne pour la prédiction d'anomalie, appelée asynchrone après réception des données
-async def predict_anomaly_internal(data: SensorData):
+async def predict_anomaly_internal(data: SensorDataPoint):
     """
     Fonction interne pour simuler la prédiction d'anomalie et générer des alertes.
-    Ne renvoie pas de réponse HTTP directement.
     """
     logging.debug(f"Initiating anomaly prediction for machine {data.machine_id}")
 
@@ -329,8 +428,7 @@ async def predict_anomaly_internal(data: SensorData):
     message_parts = []
     severity = "Avertissement" 
 
-    # Exemple de logique d'anomalie simplifiée basée sur les seuils configurés
-    # Chaque dépassement de seuil augmente le score et potentiellement la sévérité
+    # Assurez-vous d'utiliser .get() pour les seuils, au cas où une clé est manquante
     if data.temperature > machine.thresholds_config.get("temperature_critique", 90.0):
         is_anomaly = True
         anomaly_score += 0.4
@@ -347,7 +445,6 @@ async def predict_anomaly_internal(data: SensorData):
         is_anomaly = True
         anomaly_score += 0.15
         message_parts.append(f"Pression ({data.pressure:.1f}) dépasse le seuil maximal ({machine.thresholds_config.get('pressure_max', 'N/A')}).")
-        # Un dépassement de pression seul peut rester un avertissement si les autres paramètres sont bons
 
     if data.current > machine.thresholds_config.get("current_max", 35.0):
         is_anomaly = True
@@ -355,14 +452,13 @@ async def predict_anomaly_internal(data: SensorData):
         message_parts.append(f"Courant ({data.current:.1f}) dépasse le seuil maximal ({machine.thresholds_config.get('current_max', 'N/A')}).")
         if severity == "Avertissement": severity = "Critique"
 
-    # Si le score d'anomalie est très élevé, on peut monter à 'Urgence'
     if anomaly_score > 0.7:
         severity = "Urgence"
     elif anomaly_score > 0.4 and severity != "Urgence":
-        severity = "Critique" # Assure que la sévérité est au moins critique si le score est modéré
+        severity = "Critique"
 
     if is_anomaly:
-        anomaly_score = min(anomaly_score, 1.0) # Cap score at 1.0
+        anomaly_score = min(anomaly_score, 1.0)
         final_message = " et ".join(message_parts) if message_parts else f"Anomalie de type '{severity}' détectée."
 
         new_alert = Alert(
@@ -370,7 +466,7 @@ async def predict_anomaly_internal(data: SensorData):
             type="anomaly_detection",
             severity=severity,
             message=final_message,
-            details=data.dict()
+            details=data.model_dump() # Utilise model_dump() au lieu de .dict() pour Pydantic V2
         )
         if data.machine_id not in alerts_db:
             alerts_db[data.machine_id] = []
@@ -384,15 +480,13 @@ async def predict_anomaly_internal(data: SensorData):
         anomaly_score=anomaly_score,
         is_anomaly=is_anomaly,
         predicted_label="Anomaly" if is_anomaly else "Normal",
-        sensor_readings=data.dict()
+        sensor_readings=data.model_dump() # Utilise model_dump()
     )
     if data.machine_id not in predictions_db:
         predictions_db[data.machine_id] = []
     predictions_db[data.machine_id].append(prediction)
     logging.debug(f"Anomaly prediction recorded for {machine.name}: is_anomaly={is_anomaly}, score={anomaly_score:.2f}")
 
-
-# Endpoint pour récupérer les prédictions d'anomalie (pour le debug/historique ML)
 @app.get("/machines/{machine_id}/predictions/", response_model=List[AnomalyPrediction], tags=["Machine Learning"])
 async def get_machine_predictions(
     machine_id: UUID,
@@ -412,17 +506,15 @@ async def get_machine_predictions(
     sorted_predictions = sorted(predictions, key=lambda x: x.timestamp, reverse=True)
     return sorted_predictions[:limit]
 
-
 @app.get("/alerts/", response_model=List[Alert], tags=["Alerts"])
 async def get_all_alerts(resolved: Optional[bool] = False, limit: int = 100):
     """
     Récupère toutes les alertes du système, avec option de filtrage par résolution.
-    Par défaut, ne retourne que les alertes non résolues.
     """
     all_filtered_alerts: List[Alert] = []
     for machine_id in alerts_db:
         for alert in alerts_db[machine_id]:
-            if alert.is_resolved == resolved: # Filtrer par resolved
+            if alert.is_resolved == resolved:
                 all_filtered_alerts.append(alert)
 
     sorted_alerts = sorted(all_filtered_alerts, key=lambda x: x.timestamp, reverse=True)
@@ -431,7 +523,7 @@ async def get_all_alerts(resolved: Optional[bool] = False, limit: int = 100):
 @app.get("/machines/{machine_id}/alerts/", response_model=List[Alert], tags=["Alerts"])
 async def get_machine_alerts(
     machine_id: UUID,
-    resolved: Optional[bool] = False, # Par défaut, n'afficher que les alertes non résolues
+    resolved: Optional[bool] = False,
     limit: int = 50
 ):
     """
@@ -442,13 +534,12 @@ async def get_machine_alerts(
 
     all_machine_alerts = list(alerts_db[machine_id])
 
-    # Filtrer par `resolved`
     all_machine_alerts = [alert for alert in all_machine_alerts if alert.is_resolved == resolved]
 
     sorted_alerts = sorted(all_machine_alerts, key=lambda x: x.timestamp, reverse=True)
     return sorted_alerts[:limit]
 
-@app.post("/alerts/{alert_id}/resolve/", response_model=Alert, tags=["Alerts"])
+@app.put("/alerts/{alert_id}/resolve/", response_model=Alert, tags=["Alerts"])
 async def resolve_alert(alert_id: UUID):
     """
     Marque une alerte spécifique comme résolue.
@@ -461,6 +552,49 @@ async def resolve_alert(alert_id: UUID):
                 return alert
     raise HTTPException(status_code=404, detail="Alerte non trouvée")
 
+# --- NOUVEAU: Endpoints pour les Modèles ML ---
+@app.get("/ml-models/", response_model=List[MLModel], tags=["Machine Learning"])
+async def get_ml_models():
+    """
+    Récupère la liste de tous les modèles de Machine Learning enregistrés.
+    """
+    return list(db_ml_models.values())
+
+# Fonction interne pour simuler une tâche de fond d'entraînement
+async def simulate_training(model_id: str):
+    logging.info(f"Début de la simulation d'entraînement pour le modèle {model_id}...")
+    await asyncio.sleep(10) # Simule une tâche d'entraînement longue (10 secondes)
+    if model_id in db_ml_models:
+        model = db_ml_models[model_id]
+        model.status = "Actif"
+        model.last_trained = datetime.now(timezone.utc)
+        model.performance_score = round(0.85 + (0.1 * (len(model_id) % 2)), 2) # Score aléatoire
+        model.training_logs.append(f"{model.last_trained.isoformat()} - Entraînement terminé avec succès!")
+        logging.info(f"Modèle {model_id} ré-entraîné et actif. Nouveau score: {model.performance_score}")
+    else:
+        logging.warning(f"Modèle {model_id} non trouvé après entraînement simulé.")
+
+
+@app.post("/ml-models/{model_id}/retrain", response_model=Dict[str, str], tags=["Machine Learning"])
+async def retrain_ml_model(model_id: str, background_tasks: BackgroundTasks):
+    """
+    Déclenche le ré-entraînement d'un modèle de Machine Learning spécifique.
+    Le processus d'entraînement est exécuté en tâche de fond.
+    """
+    if model_id not in db_ml_models:
+        raise HTTPException(status_code=404, detail="Modèle non trouvé")
+
+    model = db_ml_models[model_id]
+    if model.status == "Entraînement":
+        raise HTTPException(status_code=400, detail="Le modèle est déjà en cours d'entraînement")
+
+    model.status = "Entraînement"
+    model.training_logs.append(f"{datetime.now(timezone.utc).isoformat()} - Déclenchement du ré-entraînement...")
+    logging.info(f"Déclenchement du ré-entraînement pour le modèle {model_id}. Statut mis à jour en 'Entraînement'.")
+
+    background_tasks.add_task(simulate_training, model_id)
+
+    return {"message": f"Ré-entraînement du modèle {model_id} déclenché."}
 
 # --- Endpoint de l'Assistant IA ---
 @app.post("/ai-assistant/", response_model=dict, tags=["AI Assistant"])
@@ -473,7 +607,6 @@ async def ask_ai(question_data: AIQuestion):
     question_lower = question_data.question.lower()
     answer = ""
 
-    # Contexte spécifique à la machine si fournie
     machine_name = "une machine non spécifiée"
     machine_status_info = ""
 
@@ -482,9 +615,7 @@ async def ask_ai(question_data: AIQuestion):
         machine_name = machine.name
         machine_status_info = f"La machine **{machine_name}** ({machine.type}, à {machine.location}) est actuellement {machine.status}."
 
-        # Logique améliorée pour les questions spécifiques à la machine
         if "risque" in question_lower or "probabilité de panne" in question_lower:
-            # Simuler un risque basé sur l'état des alertes ou un facteur aléatoire pour la démo
             machine_alerts = [a for a in alerts_db.get(question_data.machine_id, []) if not a.is_resolved]
             
             risk_level = "faible"
@@ -499,8 +630,7 @@ async def ask_ai(question_data: AIQuestion):
                 risk_level = "modéré"
                 probability = "10-20%"
             else:
-                 # Si pas d'alertes, on peut quand même simuler un risque aléatoire
-                 if random.random() < 0.1: # 10% de chance d'un risque modéré même sans alerte
+                 if random.random() < 0.1:
                      risk_level = "modéré"
                      probability = "8-12%"
             
@@ -530,14 +660,12 @@ async def ask_ai(question_data: AIQuestion):
         elif "informations" in question_lower or "détails" in question_lower:
              answer = machine_status_info + f" Elle a été installée le {machine.installation_date.strftime('%d/%m/%Y')}."
 
-    # Réponses générales si aucune machine n'est sélectionnée ou question générale
     if not answer: 
         if "bonjour" in question_lower or "salut" in question_lower:
             answer = "Bonjour ! Je suis votre assistant IA pour la maintenance prédictive. Comment puis-je vous aider ?"
         elif "aide" in question_lower:
             answer = "Je peux répondre à des questions sur le statut des machines, les risques de panne, les alertes, ou vous fournir des informations générales sur la maintenance prédictive. Essayez 'Quelle est la machine la plus à risque ?' ou 'Quelles sont les dernières alertes ?' Vous pouvez aussi me poser des questions spécifiques si une machine est sélectionnée."
         elif "machine la plus à risque" in question_lower:
-            # Identifier la machine la plus à risque en fonction des alertes actives
             machine_risk_scores: Dict[UUID, float] = {}
             for mid, alerts in alerts_db.items():
                 active_alerts = [a for a in alerts if not a.is_resolved]
@@ -574,27 +702,25 @@ async def ask_ai(question_data: AIQuestion):
         else:
             answer = f"Je n'ai pas de réponse spécifique à votre question : '{question_data.question}'. Mon développement est en cours, mais je peux vous assurer que toutes les machines sont sous surveillance constante."
     
-    # Simuler un délai de traitement de l'IA pour une meilleure UX
-    await asyncio.sleep(random.uniform(1.0, 2.5)) # Délai plus réaliste
+    await asyncio.sleep(random.uniform(1.0, 2.5))
 
     return {"response": answer}
 
 # --- Simulateur de données de capteurs (pour le développement) ---
 async def simulate_sensor_data():
     while True:
-        await asyncio.sleep(random.uniform(3, 7)) # Envoie des données toutes les 3-7 secondes
+        await asyncio.sleep(random.uniform(3, 7))
         
-        for machine_id, machine in machines_db.items():
-            # Générer des données "normales" avec de légères variations
+        for machine_id, machine in machines_db.items(): # Itere sur les machines existantes
             temp = random.uniform(60.0, 75.0)
             vib = random.uniform(5.0, 12.0)
             press = random.uniform(2.0, 4.0)
             curr = random.uniform(10.0, 20.0)
             
-            # Introduire occasionnellement des anomalies aléatoires pour le test
-            if random.random() < 0.15: # 15% de chance d'une anomalie
+            if random.random() < 0.15:
                 anomaly_type = random.choice(["high_temp", "high_vib", "high_press", "high_curr"])
                 
+                # Accès sécurisé aux seuils de configuration
                 if anomaly_type == "high_temp":
                     temp = random.uniform(machine.thresholds_config.get("temperature_critique", 85.0) + 5, 100.0)
                 elif anomaly_type == "high_vib":
@@ -604,30 +730,23 @@ async def simulate_sensor_data():
                 elif anomaly_type == "high_curr":
                     curr = random.uniform(machine.thresholds_config.get("current_max", 25.0) + 5, 40.0)
             
-            sensor_data = SensorData(
-                machine_id=machine_id,
+            sensor_data_point = SensorDataPoint( # CORRECTION: Utilise SensorDataPoint
+                machine_id=machine_id, # CORRECTION: Passe l'ID de la machine
                 temperature=temp,
                 vibration=vib,
                 pressure=press,
                 current=curr,
-                operating_hours=random.uniform(100.0, 5000.0) # Valeur aléatoire pour la démo
+                operating_hours=random.uniform(100.0, 5000.0)
             )
             
             try:
-                # Appeler l'endpoint directement (ou la fonction interne)
-                # Utiliser la fonction interne est plus direct pour un simulateur
-                # et évite le surcoût de requête HTTP.
-                # await create_sensor_data(sensor_data) # Si on veut passer par l'endpoint HTTP
-                sensor_data_db[machine_id].append(sensor_data)
-                asyncio.create_task(predict_anomaly_internal(sensor_data)) # Appel direct à la logique de prédiction
+                # CORRECTION: Initialise le deque si nécessaire
+                if machine_id not in sensor_data_db:
+                    sensor_data_db[machine_id] = deque(maxlen=1000)
+                sensor_data_db[machine_id].append(sensor_data_point) # CORRECTION: Utilise sensor_data_point
+                asyncio.create_task(predict_anomaly_internal(sensor_data_point)) # CORRECTION: Passe sensor_data_point
                 logging.debug(f"Simulated data sent for {machine.name}")
             except ValidationError as e:
                 logging.error(f"Validation error in simulator for machine {machine_id}: {e}")
             except Exception as e:
                 logging.error(f"Error sending simulated sensor data for machine {machine_id}: {e}")
-
-# Lancer le simulateur en tant que tâche de fond au démarrage de l'application
-@app.on_event("startup")
-async def start_simulator():
-    logging.info("Starting sensor data simulator...")
-    asyncio.create_task(simulate_sensor_data())
