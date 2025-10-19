@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react'; // Ajout de useMemo
+import React, { useState, useEffect, useMemo } from 'react'; 
 import axios from 'axios';
 import { Line } from 'react-chartjs-2';
 import {
@@ -32,7 +32,7 @@ interface Machine {
   name: string;
   location?: string;
   type?: string;
-  thresholds_config?: { [key: string]: any }; // Pour afficher les seuils
+  thresholds_config?: { [key: string]: any }; 
   serial_number?: string;
 }
 
@@ -43,7 +43,7 @@ interface SensorDataPoint {
   pressure: number;
   current: number;
   operating_hours?: number;
-  labels?: string[]; // Ajout des labels pour le ML
+  labels?: string[]; 
 }
 
 interface Alert {
@@ -63,13 +63,12 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8
 
 export default function MachineDetails({ machine }: MachineDetailsProps) {
   const [sensorData, setSensorData] = useState<SensorDataPoint[]>([]);
-  const [alerts, setAlerts] = useState<Alert[]>([]); // Nouvel état pour les alertes
+  const [alerts, setAlerts] = useState<Alert[]>([]); 
   const [loadingData, setLoadingData] = useState<boolean>(true);
   const [loadingAlerts, setLoadingAlerts] = useState<boolean>(true);
   const [errorData, setErrorData] = useState<string | null>(null);
   const [errorAlerts, setErrorAlerts] = useState<string | null>(null);
 
-  // Déterminer la sévérité maximale des alertes actives
   const maxSeverity = useMemo(() => {
     const activeAlerts = alerts.filter(alert => !alert.is_resolved);
     if (activeAlerts.some(alert => alert.severity === 'Urgence')) return 'Urgence';
@@ -98,8 +97,6 @@ export default function MachineDetails({ machine }: MachineDetailsProps) {
     }
   };
 
-
-  // Effet pour récupérer les données de capteurs
   useEffect(() => {
     if (!machine || !machine.id) return;
 
@@ -122,11 +119,10 @@ export default function MachineDetails({ machine }: MachineDetailsProps) {
     };
 
     fetchSensorData();
-    const interval = setInterval(fetchSensorData, 10000); // Poll toutes les 10 secondes
+    const interval = setInterval(fetchSensorData, 10000); 
     return () => clearInterval(interval);
   }, [machine]);
 
-  // Effet pour récupérer les alertes
   useEffect(() => {
     if (!machine || !machine.id) return;
 
@@ -135,7 +131,7 @@ export default function MachineDetails({ machine }: MachineDetailsProps) {
       setErrorAlerts(null);
       try {
         const response = await axios.get<Alert[]>(`${API_BASE_URL}/machines/${machine.id}/alerts/`);
-        setAlerts(response.data.filter(alert => !alert.is_resolved)); // N'affiche que les alertes non résolues
+        setAlerts(response.data.filter(alert => !alert.is_resolved)); 
       } catch (err) {
         console.error('Failed to fetch alerts:', err);
         setErrorAlerts('Impossible de charger les alertes.');
@@ -145,7 +141,7 @@ export default function MachineDetails({ machine }: MachineDetailsProps) {
     };
 
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 10000); // Poll toutes les 10 secondes
+    const interval = setInterval(fetchAlerts, 10000); 
     return () => clearInterval(interval);
   }, [machine]);
 
@@ -238,7 +234,6 @@ export default function MachineDetails({ machine }: MachineDetailsProps) {
               </div>
           )}
         </div>
-        {/* Nouveau panneau pour les KPIs (sera enrichi plus tard) */}
         <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow flex flex-col justify-center items-center">
             <h3 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Indicateurs Clés (KPIs)</h3>
             <p className="text-gray-600 dark:text-gray-300 text-center text-lg">

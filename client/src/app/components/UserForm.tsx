@@ -14,7 +14,7 @@ interface User {
 }
 
 interface UserFormProps {
-  user: User | null; // Null pour l'ajout, l'objet user pour la modification
+  user: User | null; 
   onSubmitSuccess: () => void;
 }
 
@@ -35,7 +35,6 @@ export default function UserForm({ user, onSubmitSuccess }: UserFormProps) {
       setRole(user.role);
       setStatus(user.status);
     } else {
-      // Réinitialiser le formulaire pour l'ajout
       setName('');
       setEmail('');
       setRole('Technicien');
@@ -51,11 +50,9 @@ export default function UserForm({ user, onSubmitSuccess }: UserFormProps) {
     try {
       const userData = { name, email, role, status };
       if (user) {
-        // Modification
         await axios.put(`${API_BASE_URL}/users/${user.id}`, userData);
         alert('Utilisateur modifié avec succès !');
       } else {
-        // Ajout
         await axios.post(`${API_BASE_URL}/users/`, userData);
         alert('Utilisateur ajouté avec succès !');
       }

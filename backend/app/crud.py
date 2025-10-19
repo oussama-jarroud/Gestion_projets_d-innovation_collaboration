@@ -10,7 +10,6 @@ from datetime import datetime
 def get_users(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.User).offset(skip).limit(limit).all()
 
-# Fonctions CRUD pour Machine
 def get_machine(db: Session, machine_id: uuid.UUID):
     return db.query(models.Machine).filter(models.Machine.id == machine_id).first()
 
@@ -27,11 +26,8 @@ def create_machine(db: Session, machine: schemas.MachineCreate):
     db.refresh(db_machine)
     return db_machine
 
-# Fonctions CRUD pour SensorData
-# Note : Pour les données de capteurs, nous nous concentrons sur l'ingestion et la lecture par machine/période
 def create_sensor_data(db: Session, sensor_data_item: schemas.SensorDataCreate):
-    # La clé primaire composite (timestamp, machine_id) est gérée par SQLAlchemy
-    # Si timestamp n'est pas fourni, le DEFAULT NOW() de la DB sera utilisé
+   
     db_sensor_data = models.SensorData(**sensor_data_item.dict())
     db.add(db_sensor_data)
     db.commit()
@@ -60,10 +56,8 @@ def get_sensor_data_for_machine(
         query = query.filter(models.SensorData.timestamp >= start_time)
     if end_time:
         query = query.filter(models.SensorData.timestamp <= end_time)
-    # Ordonner par timestamp pour les séries temporelles
     return query.order_by(models.SensorData.timestamp.asc()).offset(skip).limit(limit).all()
 
-# Fonction CRUD pour les alertes (simple pour l'instant)
 def create_alert(db: Session, alert_item: schemas.AlertCreate):
     db_alert = models.Alert(**alert_item.dict())
     db.add(db_alert)
@@ -77,7 +71,6 @@ def get_alerts_for_machine(db: Session, machine_id: uuid.UUID, skip: int = 0, li
 def get_unresolved_alerts(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Alert).filter(models.Alert.is_resolved == False).offset(skip).limit(limit).all()
 
-# Fonctions CRUD pour User (sera étendu avec l'authentification)
 def get_user(db: Session, user_id: uuid.UUID):
     return db.query(models.User).filter(models.User.id == user_id).first()
 
@@ -85,7 +78,6 @@ def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
 def create_user(db: Session, user: schemas.UserCreate):
-    # Le hachage du mot de passe sera ajouté ici plus tard
     fake_hashed_password = user.password + "notreallyhashed"
     db_user = models.User(
         username=user.username,

@@ -6,8 +6,8 @@ import uuid
 # Schémas pour SensorData
 class SensorDataCreate(BaseModel):
     machine_id: uuid.UUID
-    timestamp: Optional[datetime] = Field(default_factory=datetime.utcnow) # Utilisez utcnow pour la cohérence avec le timestamp de la DB
-    temperature: float = Field(..., ge=-273.15, description="Température en Celsius") # exemple de validation
+    timestamp: Optional[datetime] = Field(default_factory=datetime.utcnow) 
+    temperature: float = Field(..., ge=-273.15, description="Température en Celsius")
     vibration: float
     pressure: float
     current: float
@@ -15,10 +15,9 @@ class SensorDataCreate(BaseModel):
     labels: List[str] = Field(default_factory=list)
 
 class SensorData(SensorDataCreate):
-    # Ce schéma est pour la réponse (lecture) et inclut les champs gérés par la DB
-    # Nous pourrions inclure 'id' si la table en avait un séparé de timestamp + machine_id
+   
     class Config:
-        orm_mode = True # Permet à Pydantic de lire les données d'un modèle ORM (SQLAlchemy)
+        orm_mode = True 
 
 # Schémas pour Machine
 class MachineBase(BaseModel):
@@ -32,7 +31,7 @@ class MachineBase(BaseModel):
     thresholds_config: Dict[str, Any] = Field(default_factory=dict)
 
 class MachineCreate(MachineBase):
-    pass # Pour la création, on utilise la base
+    pass 
 
 class Machine(MachineBase):
     id: uuid.UUID
@@ -42,7 +41,6 @@ class Machine(MachineBase):
     class Config:
         orm_mode = True
 
-# Schémas pour Alert
 class AlertBase(BaseModel):
     machine_id: uuid.UUID
     timestamp: Optional[datetime] = Field(default_factory=datetime.utcnow)
@@ -63,14 +61,13 @@ class Alert(AlertBase):
     class Config:
         orm_mode = True
 
-# Schémas pour User
 class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: str = Field(..., example="user@example.com")
     role: str = Field("technician", pattern="^(admin|engineer|technician)$")
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=6) # Le mot de passe sera haché
+    password: str = Field(..., min_length=6) 
 
 class User(UserBase):
     id: uuid.UUID

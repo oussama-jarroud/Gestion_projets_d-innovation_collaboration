@@ -153,10 +153,10 @@ export default function MachineDetailsContent({ machine }: MachineDetailsContent
         label: 'Température (°C)',
         data: sensorData.map(data => data.temperature),
         borderColor: 'rgb(255, 99, 132)',
-        backgroundColor: 'rgba(255, 99, 132, 0.2)', // Rend le remplissage un peu transparent
+        backgroundColor: 'rgba(255, 99, 132, 0.2)', 
         yAxisID: 'y',
-        tension: 0.3, // Ajoute un peu de courbe
-        pointRadius: 0 // Masque les points individuels
+        tension: 0.3, 
+        pointRadius: 0 
       },
       {
         label: 'Vibration',
@@ -203,9 +203,9 @@ export default function MachineDetailsContent({ machine }: MachineDetailsContent
             day: 'dd/MM'
           }
         },
-        title: { display: true, text: 'Heure', color: '#cbd5e1' }, // Couleur du texte
-        ticks: { color: '#94a3b8' }, // Couleur des graduations
-        grid: { color: 'rgba(100, 100, 100, 0.2)' } // Couleur de la grille
+        title: { display: true, text: 'Heure', color: '#cbd5e1' }, 
+        ticks: { color: '#94a3b8' }, 
+        grid: { color: 'rgba(100, 100, 100, 0.2)' }
       },
       y: { type: 'linear' as const, display: true, position: 'left' as const, title: { display: true, text: 'Température', color: '#cbd5e1' }, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(100, 100, 100, 0.2)' } },
       y1: { type: 'linear' as const, display: true, position: 'right' as const, grid: { drawOnChartArea: false }, title: { display: true, text: 'Vibration', color: '#cbd5e1' }, ticks: { color: '#94a3b8' } },
@@ -215,12 +215,12 @@ export default function MachineDetailsContent({ machine }: MachineDetailsContent
     plugins: {
       legend: {
         position: 'top' as const,
-        labels: { color: '#cbd5e1' } // Couleur du texte de la légende
+        labels: { color: '#cbd5e1' }
       },
       title: {
         display: true,
         text: `Données de Capteurs pour ${machine.name}`,
-        color: '#cbd5e1' // Couleur du titre du graphique
+        color: '#cbd5e1'
       },
     },
   };

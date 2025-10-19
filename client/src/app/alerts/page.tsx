@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { BellAlertIcon, CheckCircleIcon, XCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'; // Icônes
+import { BellAlertIcon, CheckCircleIcon, XCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 interface Alert {
   id: string;
   machine_id: string;
-  machine_name?: string; // Ajouté pour l'affichage
+  machine_name?: string;
   timestamp: string;
   type: string;
   severity: 'Avertissement' | 'Critique' | 'Urgence';
@@ -21,7 +21,7 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [filterResolved, setFilterResolved] = useState<string>('false'); // 'true', 'false', 'all'
+  const [filterResolved, setFilterResolved] = useState<string>('false');
 
   useEffect(() => {
     const fetchAlerts = async () => {
@@ -35,40 +35,52 @@ export default function AlertsPage() {
 
         const response = await axios.get<Alert[]>(url);
 
-        // Fetch machine names for each alert
         const alertsWithMachineNames = await Promise.all(response.data.map(async (alert) => {
           try {
-            const machineResponse = await axios.get(`${API_BASE_URL}/machines/${alert.machine_id}`);
-            return { ...alert, machine_name: machineResponse.data.name };
+            if (alert.machine_id) {
+              const machineResponse = await axios.get(`${API_BASE_URL}/machines/${alert.machine_id}`);
+              return { ...alert, machine_name: machineResponse.data.name };
+            }
+            return { ...alert, machine_name: 'Inconnu (ID manquant)' };
           } catch (machineError) {
-            console.error(`Failed to fetch machine for alert ${alert.id}:`, machineError);
-            return { ...alert, machine_name: 'Inconnu' }; // Fallback
+            console.error(`Failed to fetch machine for alert ${alert.id} (machine_id: ${alert.machine_id}):`, machineError);
+            return { ...alert, machine_name: 'Inconnu' };
           }
         }));
 
         setAlerts(alertsWithMachineNames);
       } catch (err) {
         console.error('Failed to fetch alerts:', err);
-        setError('Impossible de charger les alertes.');
+        if (axios.isAxiosError(err)) {
+          setError(`Erreur de connexion ou du serveur: ${err.response?.status} - ${err.response?.data?.detail || err.message}`);
+        } else {
+          setError('Impossible de charger les alertes. Une erreur inattendue est survenue.');
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 15000); // Refresh toutes les 15 secondes
+    const interval = setInterval(fetchAlerts, 15000);
     return () => clearInterval(interval);
   }, [filterResolved]);
 
   const handleResolveAlert = async (id: string) => {
     try {
-      await axios.post(`${API_BASE_URL}/alerts/${id}/resolve`);
+      await axios.put(`${API_BASE_URL}/alerts/${id}/resolve`, { is_resolved: true });
+
       setAlerts(prevAlerts => prevAlerts.map(alert =>
         alert.id === id ? { ...alert, is_resolved: true } : alert
       ));
+      alert('Alerte résolue avec succès !');
     } catch (err) {
       console.error(`Failed to resolve alert ${id}:`, err);
-      alert('Erreur lors de la résolution de l\'alerte.');
+      if (axios.isAxiosError(err)) {
+        alert(`Erreur lors de la résolution de l'alerte: ${err.response?.status} - ${err.response?.data?.detail || err.message}\n\nL'API backend n'accepte probablement pas cette méthode HTTP (PUT) sur cet endpoint. Veuillez vérifier la configuration de votre API.`);
+      } else {
+        alert('Erreur lors de la résolution de l\'alerte. Veuillez réessayer.');
+      }
     }
   };
 
@@ -89,7 +101,6 @@ export default function AlertsPage() {
       default: return 'bg-gray-700';
     }
   };
-
 
   return (
     <div className="p-6">

@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
-import Modal from '@/app/components/Modal'; // Nous allons créer ce composant
-import UserForm from '@/app/components/UserForm'; // Nous allons créer ce composant
+import Modal from '@/app/components/Modal'; 
+import UserForm from '@/app/components/UserForm'; 
 
 interface User {
   id: string;
@@ -25,14 +25,14 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [filterRole, setFilterRole] = useState<string>('Tous'); // État pour le filtre
+  const [filterRole, setFilterRole] = useState<string>('Tous');
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
       const response = await axios.get<User[]>(`${API_BASE_URL}/users/`);
       setUsers(response.data);
-      setFilteredUsers(response.data); // Initialise avec tous les utilisateurs
+      setFilteredUsers(response.data); 
     } catch (err) {
       console.error('Failed to fetch users:', err);
       setError('Impossible de charger la liste des utilisateurs.');
@@ -45,7 +45,6 @@ export default function UsersPage() {
     fetchUsers();
   }, []);
 
-  // Effet pour filtrer les utilisateurs lorsque le rôle change ou les utilisateurs sont mis à jour
   useEffect(() => {
     if (filterRole === 'Tous') {
       setFilteredUsers(users);
@@ -68,7 +67,7 @@ export default function UsersPage() {
     if (!confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) return;
     try {
       await axios.delete(`${API_BASE_URL}/users/${userId}`);
-      fetchUsers(); // Actualise la liste après suppression
+      fetchUsers(); 
     } catch (err) {
       console.error('Failed to delete user:', err);
       alert('Erreur lors de la suppression de l\'utilisateur.');
@@ -78,7 +77,7 @@ export default function UsersPage() {
   const handleModalClose = () => {
     setIsModalOpen(false);
     setEditingUser(null);
-    fetchUsers(); // Actualise la liste après ajout/modification
+    fetchUsers();
   };
 
   const getRoleColorClass = (role: string) => {

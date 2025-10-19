@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import MachineCard from '@/app/components/MachineCard'; // Renommer pour mieux correspondre à l'affichage
+import MachineCard from '@/app/components/MachineCard'; 
 import AIAssistant from '@/app/components/AIAssistant';
-import MachineDetailsContent from '@/app/components/MachineDetailsContent'; // Nouveau composant pour les détails
+import MachineDetailsContent from '@/app/components/MachineDetailsContent'; 
 import axios from 'axios';
 
 interface Machine {
@@ -17,7 +17,7 @@ interface Machine {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
-export default function DashboardPage() { // Renommé de Home à DashboardPage
+export default function DashboardPage() { 
   const [machines, setMachines] = useState<Machine[]>([]);
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -29,7 +29,7 @@ export default function DashboardPage() { // Renommé de Home à DashboardPage
         const response = await axios.get<Machine[]>(`${API_BASE_URL}/machines/`);
         setMachines(response.data);
         if (response.data.length > 0) {
-          setSelectedMachine(response.data[0]); // Sélectionne la première machine par défaut
+          setSelectedMachine(response.data[0]); 
         }
       } catch (err) {
         console.error('Failed to fetch machines:', err);

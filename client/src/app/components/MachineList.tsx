@@ -11,7 +11,7 @@ interface Machine {
   location?: string;
   type?: string;
   serial_number?: string;
-  thresholds_config?: { [key: string]: any }; // Inclure ceci pour l'affichage des détails
+  thresholds_config?: { [key: string]: any }; 
 }
 
 interface MachineListProps {
@@ -23,7 +23,6 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8
 
 export default function MachineList({ onSelectMachine, selectedMachineId }: MachineListProps) {
   const [machines, setMachines] = useState<Machine[]>([]);
-  // const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null); // N'est plus géré ici directement
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,16 +31,15 @@ export default function MachineList({ onSelectMachine, selectedMachineId }: Mach
       try {
         const response = await axios.get<Machine[]>(`${API_BASE_URL}/machines/`);
         setMachines(response.data);
-        // Si une machine était déjà sélectionnée (ex: après un refresh), la re-sélectionner
         if (selectedMachineId) {
             const prevSelected = response.data.find(m => m.id === selectedMachineId);
             if (prevSelected) {
                 onSelectMachine(prevSelected);
             } else if (response.data.length > 0) {
-                onSelectMachine(response.data[0]); // Sélectionne la première par défaut
+                onSelectMachine(response.data[0]); 
             }
         } else if (response.data.length > 0) {
-            onSelectMachine(response.data[0]); // Sélectionne la première machine par défaut
+            onSelectMachine(response.data[0]); 
         }
       } catch (err) {
         console.error('Failed to fetch machines:', err);
@@ -52,7 +50,7 @@ export default function MachineList({ onSelectMachine, selectedMachineId }: Mach
     };
 
     fetchMachines();
-  }, []); // Exécuter une seule fois au montage
+  }, []); 
 
   if (loading) return <p className="text-center text-lg mt-4">Chargement des machines...</p>;
   if (error) return <p className="text-center text-lg text-red-500 mt-4">{error}</p>;
@@ -67,8 +65,8 @@ export default function MachineList({ onSelectMachine, selectedMachineId }: Mach
           <MachineCard
             key={machine.id}
             machine={machine}
-            onClick={() => onSelectMachine(machine)} // Appelle la prop du parent
-            isSelected={selectedMachineId === machine.id} // Utilise la prop du parent
+            onClick={() => onSelectMachine(machine)} 
+            isSelected={selectedMachineId === machine.id} 
           />
         ))}
       </div>

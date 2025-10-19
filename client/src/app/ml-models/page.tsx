@@ -1,10 +1,9 @@
-// frontend/app/ml-models/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { Cog6ToothIcon, ClockIcon, ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
-import MLModelDetailsModal from '@/app/components/MLModelDetailsModal'; // Importez la modale
+import MLModelDetailsModal from '@/app/components/MLModelDetailsModal'; 
 
 interface MLModel {
     id: string;
@@ -12,10 +11,9 @@ interface MLModel {
     algorithm: string;
     version: string;
     status: 'Actif' | 'Inactif' | 'Entraînement' | 'Erreur';
-    last_trained: string; // ISO string
-    performance_score?: number; // F1-score, Accuracy, etc.
+    last_trained: string; 
+    performance_score?: number; 
     deployed_machines_count?: number;
-    // Ajoutez ici les détails supplémentaires pour la modale
     training_logs?: string[];
     evaluation_metrics?: { [key: string]: number };
     hyperparameters?: { [key: string]: any };
@@ -28,10 +26,9 @@ export default function MLModelsPage() {
     const [models, setModels] = useState<MLModel[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState<boolean>(false); // État de la modale
-    const [selectedModel, setSelectedModel] = useState<MLModel | null>(null); // Modèle sélectionné pour les détails
+    const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+    const [selectedModel, setSelectedModel] = useState<MLModel | null>(null); 
 
-    // Fonction de simulation pour récupérer les modèles
     const fetchMLModels = async () => {
         setLoading(true);
         setError(null);
@@ -70,7 +67,7 @@ export default function MLModelsPage() {
                     name: "Prédiction de Durée de Vie Restante (RUL)",
                     algorithm: "LSTM Network",
                     version: "1.0.0",
-                    status: "Entraînement", // Simule l'état d'entraînement
+                    status: "Entraînement",
                     last_trained: "2023-10-27T08:15:00Z",
                     performance_score: undefined,
                     deployed_machines_count: 0,
@@ -92,10 +89,6 @@ export default function MLModelsPage() {
             ];
             setModels(simulatedModels);
 
-            // Quand vous aurez un endpoint API pour les modèles ML:
-            // const response = await axios.get<MLModel[]>(`${API_BASE_URL}/ml-models`);
-            // setModels(response.data);
-
         } catch (err) {
             console.error('Failed to fetch ML models:', err);
             setError('Impossible de charger la liste des modèles ML.');
@@ -106,8 +99,7 @@ export default function MLModelsPage() {
 
     useEffect(() => {
         fetchMLModels();
-        // Peut-être rafraîchir toutes les 30 secondes pour les statuts d'entraînement
-        const interval = setInterval(fetchMLModels, 10000); // Rafraîchir plus souvent pour voir l'état d'entraînement changer (simulé)
+        const interval = setInterval(fetchMLModels, 10000); 
         return () => clearInterval(interval);
     }, []);
 
@@ -142,20 +134,13 @@ export default function MLModelsPage() {
     };
 
     const handleRetrainModel = async (modelId: string) => {
-        // Logique pour déclencher le ré-entraînement via l'API
         console.log(`Déclenchement du ré-entraînement pour le modèle: ${modelId}`);
-        // Ici, vous feriez un appel API vers votre backend
         try {
-            // const response = await axios.post(`${API_BASE_URL}/ml-models/${modelId}/retrain`);
-            // console.log('Ré-entraînement déclenché avec succès:', response.data);
-
-            // Mise à jour optimiste ou attente du prochain fetch
             setModels(prevModels =>
                 prevModels.map(model =>
                     model.id === modelId ? { ...model, status: 'Entraînement', last_trained: new Date().toISOString() } : model
                 )
             );
-            // Afficher une notification à l'utilisateur
             alert(`Le modèle ${modelId} est en cours de ré-entraînement.`);
         } catch (err) {
             console.error('Échec du ré-entraînement:', err);

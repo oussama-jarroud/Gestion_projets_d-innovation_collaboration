@@ -5,7 +5,6 @@ import axios from 'axios';
 import { PlusIcon, CalendarIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline'; // Icône pour planifier
 import { Transition, Dialog } from '@headlessui/react'; // Pour la modale
 import MaintenanceTaskCard from './MaintenanceTaskCard'; // Nous allons créer ce composant
-import ScheduleTaskModal from './ScheduleTaskModal'; // Nous allons créer ce composant
 
 interface Machine {
     id: string;
@@ -145,12 +144,7 @@ export default function MaintenancePageContent() {
                 </div>
             )}
 
-            <ScheduleTaskModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onSchedule={handleScheduleTask}
-                machines={machines}
-            />
+            
         </div>
     );
 }

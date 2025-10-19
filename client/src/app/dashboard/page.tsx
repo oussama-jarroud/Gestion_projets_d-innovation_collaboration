@@ -12,11 +12,10 @@ import {
     Title,
     Tooltip,
     Legend,
-    TimeScale // Important pour l'axe temporel
+    TimeScale 
 } from 'chart.js';
-import 'chartjs-adapter-date-fns'; // Adaptateur pour les dates
+import 'chartjs-adapter-date-fns';
 
-// Enregistrez les composants nécessaires pour Chart.js
 ChartJS.register(
     CategoryScale,
     LinearScale,
@@ -28,7 +27,6 @@ ChartJS.register(
     TimeScale
 );
 
-// Placeholder pour les données d'alerte globale
 interface GlobalAlert {
     id: string;
     machine_name: string;
@@ -49,11 +47,7 @@ export default function GlobalDashboardPage() {
             setLoadingAlerts(true);
             setErrorAlerts(null);
             try {
-                // Pour l'exemple, nous allons récupérer toutes les alertes non résolues
-                // Vous pourriez avoir un endpoint spécifique '/alerts/global' pour de vraies stats
                 const response = await axios.get(`${API_BASE_URL}/alerts/?resolved=false&limit=10`);
-                // Assurez-vous d'avoir le nom de la machine dans vos alertes ou faites une jointure
-                // Pour cet exemple, nous allons simuler le machine_name
                 const alertsWithMachineNames = await Promise.all(response.data.map(async (alert: any) => {
                     const machineRes = await axios.get(`${API_BASE_URL}/machines/${alert.machine_id}`);
                     return {
@@ -71,7 +65,7 @@ export default function GlobalDashboardPage() {
         };
 
         fetchGlobalAlerts();
-        const interval = setInterval(fetchGlobalAlerts, 15000); // Rafraîchir toutes les 15 secondes
+        const interval = setInterval(fetchGlobalAlerts, 15000);
         return () => clearInterval(interval);
     }, []);
 
@@ -84,13 +78,12 @@ export default function GlobalDashboardPage() {
         }
     };
 
-    // Données et options pour un graphique global de "Santé du Parc Machines" (Exemple statique pour l'instant)
     const globalHealthChartData = {
         labels: ['00:00', '02:00', '04:00', '06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'],
         datasets: [
             {
                 label: 'Machines en Alerte',
-                data: [2, 3, 2, 4, 3, 5, 4, 6, 5, 7, 6, 8], // Exemple de données
+                data: [2, 3, 2, 4, 3, 5, 4, 6, 5, 7, 6, 8], 
                 borderColor: 'rgb(255, 99, 132)',
                 backgroundColor: 'rgba(255, 99, 132, 0.2)',
                 fill: true,
@@ -98,7 +91,7 @@ export default function GlobalDashboardPage() {
             },
             {
                 label: 'Machines en Avertissement',
-                data: [5, 4, 6, 5, 7, 6, 8, 7, 9, 8, 10, 9], // Exemple de données
+                data: [5, 4, 6, 5, 7, 6, 8, 7, 9, 8, 10, 9], 
                 borderColor: 'rgb(255, 205, 86)',
                 backgroundColor: 'rgba(255, 205, 86, 0.2)',
                 fill: true,

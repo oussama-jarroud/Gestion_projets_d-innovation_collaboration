@@ -10,7 +10,7 @@ interface LogEntry {
     timestamp: string;
     type: string;
     machine_id?: string;
-    machine_name?: string; // Ajouter pour l'affichage
+    machine_name?: string; 
     severity?: 'Avertissement' | 'Critique' | 'Urgence';
     message: string;
 }
@@ -22,15 +22,13 @@ export default function HistoryPage() {
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState<string>('');
-    const [filterType, setFilterType] = useState<string>('all'); // 'all', 'Alert', 'MachineEvent', etc.
+    const [filterType, setFilterType] = useState<string>('all');
 
     useEffect(() => {
         const fetchHistory = async () => {
             setLoading(true);
             setError(null);
             try {
-                // Pour cet exemple, nous allons récupérer les 20 dernières alertes non résolues (pour simuler l'historique d'alertes)
-                // Idéalement, cet endpoint devrait retourner un mélange de différents types de logs
                 const alertsResponse = await axios.get(`${API_BASE_URL}/alerts/?limit=20`);
 
                 const fetchedLogs: LogEntry[] = await Promise.all(alertsResponse.data.map(async (alert: any) => {
@@ -53,30 +51,28 @@ export default function HistoryPage() {
                         message: alert.message,
                     };
                 }));
-
-                // Ajouter quelques logs simulés pour diversifier l'affichage
                 const simulatedLogs: LogEntry[] = [
                     {
                         id: 'sys_log_1',
-                        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(), // Il y a 3 heures
+                        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(), 
                         type: 'System',
                         message: 'Mise à jour du modèle ML "Détection d\'Anomalies de Température" version 1.2.0.',
                     },
                     {
                         id: 'mach_event_1',
-                        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(), // Il y a 6 heures
+                        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(), 
                         type: 'MachineEvent',
-                        machine_id: 'VOTRE_UUID_MACHINE_ICI', // Remplacez par un ID de machine réel si vous voulez le voir
+                        machine_id: 'VOTRE_UUID_MACHINE_ICI',
                         machine_name: 'Broyeur Alpha',
                         message: 'Maintenance planifiée terminée sur le Broyeur Alpha.',
                     },
                     {
                         id: 'user_action_1',
-                        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(), // Il y a 8 heures
+                        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(), 
                         type: 'UserAction',
                         message: 'Utilisateur "Admin" a résolu l\'alerte #4567.',
                     },
-                ].filter(log => log.machine_id === 'VOTRE_UUID_MACHINE_ICI' ? false : true); // Éviter les doublons si l'ID de machine simulé est déjà dans les alertes
+                ].filter(log => log.machine_id === 'VOTRE_UUID_MACHINE_ICI' ? false : true); 
 
                 setHistory([...fetchedLogs, ...simulatedLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
 
@@ -89,7 +85,7 @@ export default function HistoryPage() {
         };
 
         fetchHistory();
-        const interval = setInterval(fetchHistory, 60000); // Rafraîchir toutes les minutes
+        const interval = setInterval(fetchHistory, 60000); 
         return () => clearInterval(interval);
     }, []);
 

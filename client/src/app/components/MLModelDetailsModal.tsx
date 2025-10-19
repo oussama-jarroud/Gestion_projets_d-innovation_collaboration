@@ -1,11 +1,10 @@
-// frontend/components/MLModelDetailsModal.tsx
 import React from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import {
   XMarkIcon,
   Cog6ToothIcon,
-  MicrophoneIcon, // Ou une icône plus pertinente pour l'IA/ML
+  MicrophoneIcon, 
   ClipboardDocumentListIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
@@ -18,10 +17,9 @@ interface MLModel {
   algorithm: string;
   version: string;
   status: 'Actif' | 'Inactif' | 'Entraînement' | 'Erreur';
-  last_trained: string; // ISO string
+  last_trained: string; 
   performance_score?: number;
   deployed_machines_count?: number;
-  // Ajoutez d'autres champs si vous souhaitez afficher plus de détails
   training_logs?: string[];
   evaluation_metrics?: { [key: string]: number };
   hyperparameters?: { [key: string]: any };

@@ -11,12 +11,12 @@ import {
   BellAlertIcon,
   UserGroupIcon,
   QueueListIcon,
-  SparklesIcon // Pour l'IA
-} from '@heroicons/react/24/outline'; // Utilisez des icônes outline pour la sidebar
+  SparklesIcon 
+} from '@heroicons/react/24/outline';
 
 const navItems = [
-  { name: 'Machines', href: '/', icon: QueueListIcon }, // Page d'accueil montrant la liste des machines
-  { name: 'Dashboard', href: '/dashboard', icon: ChartBarSquareIcon }, // La page que nous allons créer
+  { name: 'Machines', href: '/', icon: QueueListIcon }, 
+  { name: 'Dashboard', href: '/dashboard', icon: ChartBarSquareIcon }, 
   { name: 'ML Modèles', href: '/ml-models', icon: Cog6ToothIcon },
   { name: 'Alertes', href: '/alerts', icon: BellAlertIcon },
   { name: 'Historique', href: '/history', icon: ClipboardDocumentListIcon },
